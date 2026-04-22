@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Simple MEP Project Manager</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --panel-2: #1f2937;
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --accent: #22c55e;
+      --warn: #f59e0b;
+      --danger: #ef4444;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .app {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      height: 100vh;
+    }
+    .sidebar {
+      background: var(--panel);
+      border-right: 1px solid #334155;
+      padding: 12px;
+      overflow: auto;
+    }
+    .main {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      min-width: 0;
+    }
+    .toolbar {
+      background: var(--panel);
+      border-bottom: 1px solid #334155;
+      padding: 10px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .canvas {
+      overflow: auto;
+      padding: 12px;
+    }
+    .card {
+      background: var(--panel-2);
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 10px;
+    }
+    label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+    input, select, button {
+      width: 100%;
+      padding: 8px;
+      border-radius: 6px;
+      border: 1px solid #475569;
+      background: #0b1220;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+    button {
+      background: #0b1220;
+      cursor: pointer;
+    }
+    button.primary { background: #065f46; border-color: #10b981; }
+    button.warn { background: #78350f; border-color: #f59e0b; }
+    .row { display: flex; gap: 8px; }
+    .row > * { flex: 1; }
+    .task {
+      padding: 8px;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      margin-bottom: 6px;
+      background: #0b1220;
+    }
+    .small { font-size: 12px; color: var(--muted); }
+    .stat {
+      font-weight: bold;
+      color: var(--accent);
+    }
+    svg { background: #0b1220; border: 1px solid #334155; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <h2>Simple MEP PM</h2>
+      <div class="card">
+        <label>Project Name</label>
+        <input id="projectName" placeholder="Tower A MEP" value="Tower A MEP" />
+        <div class="row">
+          <div>
+            <label>Floors</label>
+            <input id="projectFloors" value="G+5" />
+          </div>
+          <div>
+            <label>Type</label>
+            <select id="projectType">
+              <option>Commercial</option>
+              <option>Residential</option>
+            </select>
+          </div>
+        </div>
+        <button id="saveProject" class="primary">Save Project</button>
+      </div>
+
+      <div class="card">
+        <h3>Add Task</h3>
+        <label>Name</label>
+        <input id="taskName" placeholder="Cable Pulling" />
+        <div class="row">
+          <div>
+            <label>MEP Type</label>
+            <select id="taskMepType">
+              <option>Electrical</option>
+              <option>HVAC</option>
+              <option>Plumbing</option>
+            </select>
+          </div>
+          <div>
+            <label>Floor</label>
+            <input id="taskFloor" value="L1" />
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>Start Date</label>
+            <input id="taskStartDate" type="date" />
+          </div>
+          <div>
+            <label>Quantity</label>
+            <input id="taskQty" type="number" value="150" />
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>Productivity / day</label>
+            <input id="taskRate" type="number" value="50" />
+          </div>
+          <div>
+            <label>Status</label>
+            <select id="taskStatus">
+              <option>Not Started</option>
+              <option>In Progress</option>
+              <option>Completed</option>
+            </select>
+          </div>
+        </div>
+        <label>Depends On Task ID (optional)</label>
+        <input id="taskDependsOn" type="number" placeholder="e.g. 1" />
+        <button id="addTask" class="primary">Add Task</button>
+      </div>
+
+      <div class="card">
+        <h3>Templates</h3>
+        <button id="addElectrical">Add Electrical Template</button>
+        <button id="addHvac">Add HVAC Template</button>
+        <button id="addPlumbing">Add Plumbing Template</button>
+      </div>
+
+      <div class="card">
+        <h3>Tasks</h3>
+        <div id="taskList"></div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="toolbar">
+        <div>Project Completion: <span id="projectCompletion" class="stat">0%</span></div>
+        <div class="small">Duration = ceil(Quantity / Productivity)</div>
+      </div>
+      <div class="canvas">
+        <svg id="gantt" width="1400" height="700"></svg>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const STORAGE_KEY = "simple_mep_pm_data_v1";
+    const state = loadState() || {
+      project: { name: "Tower A MEP", floors: "G+5", type: "Commercial" },
+      tasks: [],
+      nextTaskId: 1
+    };
+
+    const els = {
+      projectName: document.getElementById("projectName"),
+      projectFloors: document.getElementById("projectFloors"),
+      projectType: document.getElementById("projectType"),
+      taskName: document.getElementById("taskName"),
+      taskMepType: document.getElementById("taskMepType"),
+      taskFloor: document.getElementById("taskFloor"),
+      taskStartDate: document.getElementById("taskStartDate"),
+      taskQty: document.getElementById("taskQty"),
+      taskRate: document.getElementById("taskRate"),
+      taskStatus: document.getElementById("taskStatus"),
+      taskDependsOn: document.getElementById("taskDependsOn"),
+      taskList: document.getElementById("taskList"),
+      gantt: document.getElementById("gantt"),
+      projectCompletion: document.getElementById("projectCompletion")
+    };
+
+    document.getElementById("saveProject").onclick = () => {
+      state.project.name = els.projectName.value.trim();
+      state.project.floors = els.projectFloors.value.trim();
+      state.project.type = els.projectType.value;
+      saveAndRender();
+    };
+
+    document.getElementById("addTask").onclick = () => {
+      const name = els.taskName.value.trim();
+      if (!name) return alert("Task name is required");
+      const startDate = els.taskStartDate.value || todayISO();
+      const quantity = Number(els.taskQty.value || 0);
+      const productivity = Number(els.taskRate.value || 0);
+      const duration = Math.max(1, Math.ceil(quantity / Math.max(1, productivity)));
+      const dependsOn = Number(els.taskDependsOn.value || 0) || null;
+
+      if (dependsOn && !state.tasks.some(t => t.id === dependsOn)) {
+        return alert("Dependency task ID not found");
+      }
+      const newTask = {
+        id: state.nextTaskId++,
+        name,
+        mepType: els.taskMepType.value,
+        floor: els.taskFloor.value || "L1",
+        startDate,
+        duration,
+        endDate: addDaysISO(startDate, duration - 1),
+        status: els.taskStatus.value,
+        completion: els.taskStatus.value === "Completed" ? 100 : (els.taskStatus.value === "In Progress" ? 50 : 0),
+        quantity,
+        productivity,
+        dependsOn
+      };
+
+      state.tasks.push(newTask);
+      if (hasCycle(state.tasks)) {
+        state.tasks.pop();
+        state.nextTaskId--;
+        return alert("Circular dependency detected");
+      }
+      autoAdjustSchedule();
+      saveAndRender();
+    };
+
+    document.getElementById("addElectrical").onclick = () => addTemplate("Electrical", [
+      "Cable Tray Installation",
+      "Conduit Work",
+      "Cable Pulling",
+      "Termination",
+      "Testing"
+    ]);
+    document.getElementById("addHvac").onclick = () => addTemplate("HVAC", [
+      "Duct Installation",
+      "AHU Installation",
+      "Testing & Balancing"
+    ]);
+    document.getElementById("addPlumbing").onclick = () => addTemplate("Plumbing", [
+      "Pipe Routing",
+      "Fixture Installation",
+      "Hydro Test",
+      "Commissioning"
+    ]);
+
+    function addTemplate(mepType, names) {
+      let start = todayISO();
+      let prevId = null;
+      for (const name of names) {
+        const id = state.nextTaskId++;
+        const duration = 2;
+        const task = {
+          id,
+          name,
+          mepType,
+          floor: "L1",
+          startDate: start,
+          duration,
+          endDate: addDaysISO(start, duration - 1),
+          status: "Not Started",
+          completion: 0,
+          quantity: 100,
+          productivity: 50,
+          dependsOn: prevId
+        };
+        state.tasks.push(task);
+        prevId = id;
+        start = addDaysISO(start, duration);
+      }
+      autoAdjustSchedule();
+      saveAndRender();
+    }
+
+    function autoAdjustSchedule() {
+      const byId = new Map(state.tasks.map(t => [t.id, t]));
+      for (let i = 0; i < state.tasks.length; i++) {
+        for (const task of state.tasks) {
+          if (!task.dependsOn) continue;
+          const parent = byId.get(task.dependsOn);
+          if (!parent) continue;
+          const minStart = addDaysISO(parent.endDate, 1);
+          if (task.startDate < minStart) {
+            task.startDate = minStart;
+            task.endDate = addDaysISO(task.startDate, task.duration - 1);
+          }
+        }
+      }
+    }
+
+    function hasCycle(tasks) {
+      const graph = new Map();
+      for (const t of tasks) graph.set(t.id, []);
+      for (const t of tasks) if (t.dependsOn) graph.get(t.dependsOn)?.push(t.id);
+
+      const visiting = new Set();
+      const visited = new Set();
+      function dfs(node) {
+        if (visiting.has(node)) return true;
+        if (visited.has(node)) return false;
+        visiting.add(node);
+        for (const next of graph.get(node) || []) {
+          if (dfs(next)) return true;
+        }
+        visiting.delete(node);
+        visited.add(node);
+        return false;
+      }
+      for (const t of tasks) if (dfs(t.id)) return true;
+      return false;
+    }
+
+    function renderTasks() {
+      els.taskList.innerHTML = "";
+      for (const t of state.tasks) {
+        const div = document.createElement("div");
+        div.className = "task";
+        div.innerHTML = `
+          <div><strong>#${t.id}</strong> ${t.name}</div>
+          <div class="small">${t.mepType} | ${t.floor} | ${t.startDate} → ${t.endDate}</div>
+          <div class="small">Status: ${t.status} | Depends on: ${t.dependsOn || "-"}</div>
+        `;
+        els.taskList.appendChild(div);
+      }
+    }
+
+    function renderCompletion() {
+      if (!state.tasks.length) {
+        els.projectCompletion.textContent = "0%";
+        return;
+      }
+      const total = state.tasks.reduce((sum, t) => sum + t.completion, 0);
+      const pct = Math.round(total / state.tasks.length);
+      els.projectCompletion.textContent = pct + "%";
+    }
+
+    function renderGantt() {
+      const svg = els.gantt;
+      while (svg.firstChild) svg.removeChild(svg.firstChild);
+      const tasks = [...state.tasks].sort((a, b) => a.startDate.localeCompare(b.startDate));
+      const width = 1400;
+      const rowH = 36;
+      const top = 40, left = 260;
+      const height = Math.max(700, top + tasks.length * rowH + 60);
+      svg.setAttribute("height", String(height));
+
+      if (!tasks.length) return;
+      const minDate = tasks.reduce((m, t) => t.startDate < m ? t.startDate : m, tasks[0].startDate);
+      const maxDate = tasks.reduce((m, t) => t.endDate > m ? t.endDate : m, tasks[0].endDate);
+      const totalDays = Math.max(1, daysBetween(minDate, maxDate) + 1);
+      const pxPerDay = (width - left - 40) / totalDays;
+
+      drawLine(svg, left, 20, width - 20, 20, "#475569", 1);
+      for (let d = 0; d <= totalDays; d += Math.max(1, Math.floor(totalDays / 10))) {
+        const x = left + d * pxPerDay;
+        drawLine(svg, x, 24, x, height - 20, "#1e293b", 1);
+        drawText(svg, x + 2, 16, addDaysISO(minDate, d), "#94a3b8", 11);
+      }
+
+      const positions = new Map();
+      tasks.forEach((t, i) => {
+        const y = top + i * rowH;
+        const x = left + daysBetween(minDate, t.startDate) * pxPerDay;
+        const w = Math.max(6, (daysBetween(t.startDate, t.endDate) + 1) * pxPerDay - 2);
+        const color = t.status === "Completed" ? "#10b981" : t.status === "In Progress" ? "#3b82f6" : "#64748b";
+        drawText(svg, 10, y + 16, `${t.floor} | ${t.mepType} | #${t.id} ${t.name}`, "#cbd5e1", 12);
+        drawRect(svg, x, y, w, 20, color, "#0f172a");
+        positions.set(t.id, { x, y, w });
+      });
+
+      for (const t of tasks) {
+        if (!t.dependsOn) continue;
+        const from = positions.get(t.dependsOn);
+        const to = positions.get(t.id);
+        if (!from || !to) continue;
+        drawPath(svg, `M${from.x + from.w} ${from.y + 10} C ${from.x + from.w + 24} ${from.y + 10}, ${to.x - 24} ${to.y + 10}, ${to.x} ${to.y + 10}`, "#94a3b8");
+      }
+    }
+
+    function drawRect(svg, x, y, w, h, fill, stroke) {
+      const el = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      el.setAttribute("x", x); el.setAttribute("y", y);
+      el.setAttribute("width", w); el.setAttribute("height", h);
+      el.setAttribute("rx", "4");
+      el.setAttribute("fill", fill);
+      el.setAttribute("stroke", stroke || "none");
+      svg.appendChild(el);
+    }
+    function drawText(svg, x, y, text, fill, size) {
+      const el = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      el.setAttribute("x", x); el.setAttribute("y", y);
+      el.setAttribute("fill", fill || "#e5e7eb");
+      el.setAttribute("font-size", String(size || 12));
+      el.textContent = text;
+      svg.appendChild(el);
+    }
+    function drawLine(svg, x1, y1, x2, y2, stroke, width) {
+      const el = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      el.setAttribute("x1", x1); el.setAttribute("y1", y1);
+      el.setAttribute("x2", x2); el.setAttribute("y2", y2);
+      el.setAttribute("stroke", stroke || "#64748b");
+      el.setAttribute("stroke-width", String(width || 1));
+      svg.appendChild(el);
+    }
+    function drawPath(svg, d, stroke) {
+      const el = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      el.setAttribute("d", d);
+      el.setAttribute("fill", "none");
+      el.setAttribute("stroke", stroke || "#94a3b8");
+      el.setAttribute("stroke-width", "1.4");
+      svg.appendChild(el);
+    }
+
+    function saveAndRender() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      render();
+    }
+    function loadState() {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    }
+    function render() {
+      els.projectName.value = state.project.name;
+      els.projectFloors.value = state.project.floors;
+      els.projectType.value = state.project.type;
+      renderTasks();
+      renderCompletion();
+      renderGantt();
+    }
+
+    function todayISO() {
+      const d = new Date();
+      return d.toISOString().slice(0, 10);
+    }
+    function addDaysISO(dateStr, days) {
+      const d = new Date(dateStr + "T00:00:00");
+      d.setDate(d.getDate() + days);
+      return d.toISOString().slice(0, 10);
+    }
+    function daysBetween(start, end) {
+      const a = new Date(start + "T00:00:00");
+      const b = new Date(end + "T00:00:00");
+      return Math.floor((b - a) / (1000 * 60 * 60 * 24));
+    }
+
+    if (!els.taskStartDate.value) els.taskStartDate.value = todayISO();
+    render();
+  </script>
+</body>
+</html>
