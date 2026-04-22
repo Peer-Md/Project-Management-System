@@ -81,6 +81,24 @@ Frontend:
    - `VITE_API_BASE_URL=https://your-backend-domain/api`
 3. Share the frontend URL with your team.
 
+## Deploy (Recommended: Render + Vercel)
+
+### Backend + Database on Render
+1. Push this repository to GitHub.
+2. In Render, create a new Blueprint and select this repo.
+3. Render will use `render.yaml` to create:
+   - PostgreSQL database (`pm-db`)
+   - Node backend service (`pm-backend`)
+4. Wait for deploy to complete and copy backend URL:
+   - `https://<your-render-service>.onrender.com`
+
+### Frontend on Vercel
+1. Import the same GitHub repository into Vercel.
+2. Set project root directory to `frontend`.
+3. Add environment variable in Vercel:
+   - `VITE_API_BASE_URL=https://<your-render-service>.onrender.com/api`
+4. Deploy and share the generated Vercel URL.
+
 ## Notes
 - Duration calculation uses `ceil(quantity / productivity_rate)`.
 - Critical path uses longest dependency chain by duration.
