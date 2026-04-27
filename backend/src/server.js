@@ -1,25 +1,25 @@
 import express from 'express';
 import cors from 'cors';
 
+// ✅ import your actual route file
+import projectRoutes from './routes/projects.js';
+
 const app = express();
 
-// ✅ CORS FIX (this solves your error)
+// ✅ CORS
 app.use(cors({
   origin: '*'
 }));
 
-// ✅ JSON middleware
+// ✅ JSON parser
 app.use(express.json());
 
-// ✅ Test route
+// ✅ test route
 app.get('/api', (req, res) => {
-  res.json({ message: 'API is working 🚀' });
+  res.json({ message: "API working ✅" });
 });
 
-// ✅ KEEP YOUR EXISTING ROUTES BELOW
-// IMPORTANT: do NOT remove your routes
-// Example:
-// import projectRoutes from './routes/projectRoutes.js';
-// app.use('/api/projects', projectRoutes);
+// ✅ connect your routes
+app.use('/api/projects', projectRoutes);
 
 export default app;
