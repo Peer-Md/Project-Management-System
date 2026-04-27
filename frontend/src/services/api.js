@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_BASE_URL + "/api";
+const API_BASE = "https://pm-backend-i9ha.onrender.com/api";
 
 async function request(path, options = {}) {
   const response = await fetch(`${API_BASE}${path}`, {
