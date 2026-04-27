@@ -1,9 +1,25 @@
-import app from "./app.js";
-import { loadEnv } from "./loadEnv.js";
+import express from 'express';
+import cors from 'cors';
 
-loadEnv();
+const app = express();
 
-const port = Number(process.env.PORT || 4000);
-app.listen(port, () => {
-  console.log(`Backend listening on port ${port}`);
+// ✅ CORS FIX (this solves your error)
+app.use(cors({
+  origin: '*'
+}));
+
+// ✅ JSON middleware
+app.use(express.json());
+
+// ✅ Test route
+app.get('/api', (req, res) => {
+  res.json({ message: 'API is working 🚀' });
 });
+
+// ✅ KEEP YOUR EXISTING ROUTES BELOW
+// IMPORTANT: do NOT remove your routes
+// Example:
+// import projectRoutes from './routes/projectRoutes.js';
+// app.use('/api/projects', projectRoutes);
+
+export default app;
